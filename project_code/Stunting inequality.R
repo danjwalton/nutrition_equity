@@ -14,7 +14,7 @@ lorenzdist <- function(data, weights=1){
     df$P <- df$p/sum(df$p)
     df$P <- cumsum(df$P)
   }
-  df$pos.z <- df$z + abs(min(df$z))
+  df$pos.z <- df$z + 600 #abs(min(df$z))
   df$L <- df$pos.z/sum(df$pos.z)
   df$L <- cumsum(df$L)
   return(df)
@@ -94,7 +94,7 @@ if(!("stuntingrawDHS.RData" %in% list.files("project_data"))){
     pr_path <- paste0(tolower(pr_patha),"fl.RData")
     load(pr_path)
     #If individual recode includes height-for-age, keep this. Otherwise, load birth recode and look for height-for-age there.
-    if(length(names(data)[which(names(data)=="hc70")])){
+    if(length(names(data)[which(names(data)=="hc70")])==1){
       dat <- data.table(V1=data$hc70, V2=data$hv005)
     } else {
       rm(data)
@@ -124,3 +124,4 @@ if(!("stuntingrawDHS.RData" %in% list.files("project_data"))){
 data <- data[V1 < 9900]
 gini <- data[, .(Gini = ginicalc(lorenzdist(V1,V2)$P, lorenzdist(V1,V2)$L)), by=V3]
 
+fwrite(gini, "project_data/Stunting Gini stats.csv")
