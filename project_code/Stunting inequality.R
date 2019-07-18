@@ -5,19 +5,21 @@ wd <- "G:/My Drive/Work/GitHub/nutrition_equity"
 wd2 <- "G:/My Drive/Work/GitHub/p20_indicator_time_trends/data/DHSauto"
 
 ###Define functions
-lorenzdist <- function(data, weights=1){
-  df <- data.table(z=data, p=weights)
-  df <- df[order(z)]
-  if(df$p==1){
-    df$P <- seq(0+1/nrow(df),1,1/nrow(df))
-  } else {
-    df$P <- df$p/sum(df$p)
-    df$P <- cumsum(df$P)
-  }
-  df$pos.z <- df$z + 600 #abs(min(df$z))
-  df$L <- df$pos.z/sum(df$pos.z)
-  df$L <- cumsum(df$L)
-  return(df)
+lorenzdist <- function(data, weights=1,offset=0){
+  suppressWarnings({
+    df <- data.table(z=data, p=weights)
+    df <- df[order(z)]
+    if(df$p==1){
+      df$P <- seq(0+1/nrow(df),1,1/nrow(df))
+    } else {
+      df$P <- df$p/sum(df$p)
+      df$P <- cumsum(df$P)
+    }
+    df$pos.z <- df$z + offset
+    df$L <- df$pos.z/sum(df$pos.z)
+    df$L <- cumsum(df$L)
+    return(df)
+  })
 }
 
 ginicalc <- function(P,L){
@@ -29,6 +31,22 @@ ginicalc <- function(P,L){
   area <- sum(dPL) + sum(dPfL)
   gini <- 1-2*area
   return(gini)
+}
+
+polarisationcalc <- function(data,weights=1,z,offset=0){
+  z <- z + offset
+  dist <- lorenzdist(data,weights,offset)
+  data <- data + offset
+  mu <- weighted.mean(data, weights)
+  g <- ginicalc(dist$P,dist$L)
+  dist$qdif <- abs(z - dist$pos.z)
+  q <- spatstat::weighted.median(dist$P[which(dist$qdif==min(dist$qdif))],dist$p[which(dist$qdif==min(dist$qdif))])
+  dist$pdif <- abs(q - dist$P)
+  lq <- dist$L[which(dist$pdif==min(dist$pdif))]
+  b <- q - lq
+  t <- b + (0.5-q)*(1-z/mu)
+  gp <- 2*(mu/z)*(2*t-g)
+  return(gp)
 }
 
 ###Metadata
@@ -122,6 +140,7 @@ if(!("stuntingrawDHS.RData" %in% list.files("project_data"))){
 }
 
 data <- data[V1 < 9900]
-gini <- data[, .(Gini = ginicalc(lorenzdist(V1,V2)$P, lorenzdist(V1,V2)$L)), by=V3]
+equity <- data[, .(Gini=ginicalc(lorenzdist(V1,V2,600)$P, lorenzdist(V1,V2,600)$L), Polarisation_0=polarisationcalc(V1,V2,0,600), `Polarisation_-2`=polarisationcalc(V1,V2,-200,600),Mean=weighted.mean(V1,V2)/100), by=.(V3)]
+equity <- merge(dhsmeta2, equity, by.x="filename", by.y="V3")
 
-fwrite(gini, "project_data/Stunting Gini stats.csv")
+fwrite(equity, "project_data/Stunting equity stats.csv")
