@@ -5,19 +5,20 @@ wd <- "G:/My Drive/Work/GitHub/nutrition_equity"
 wd2 <- "G:/My Drive/Work/GitHub/p20_indicator_time_trends/data/DHSauto"
 
 ###Define functions
-lorenzdist <- function(data, weights=1,offset=0){
+lorenzdist <- function(input,weights=1,offset=0){
   suppressWarnings({
-    df <- data.table(z=data, p=weights)
+    df <- data.table(z=input, p=weights)
     df <- df[order(z)]
     if(df$p==1){
       df$P <- seq(0+1/nrow(df),1,1/nrow(df))
     } else {
-      df$P <- df$p/sum(df$p)
-      df$P <- cumsum(df$P)
+      df$p <- df$p/sum(df$p)
+      df$P <- cumsum(df$p)
     }
-    df$pos.z <- df$z + offset
-    df$L <- df$pos.z/sum(df$pos.z)
-    df$L <- cumsum(df$L)
+    df$z.off <- df$z + offset
+    df$z.weight <- df$z.off * df$p
+    df$l <- df$z.weight/sum(df$z.weight)
+    df$L <- cumsum(df$l)
     return(df)
   })
 }
@@ -33,19 +34,21 @@ ginicalc <- function(P,L){
   return(gini)
 }
 
-polarisationcalc <- function(data,weights=1,z,offset=0){
-  z <- z + offset
-  dist <- lorenzdist(data,weights,offset)
-  data <- data + offset
-  mu <- weighted.mean(data, weights)
+polarisationcalc <- function(input,weights=1,z,offset=0){
+  dist <- lorenzdist(input,weights,offset)
+  input.off <- input + offset
   g <- ginicalc(dist$P,dist$L)
-  dist$qdif <- abs(z - dist$pos.z)
-  q <- spatstat::weighted.median(dist$P[which(dist$qdif==min(dist$qdif))],dist$p[which(dist$qdif==min(dist$qdif))])
-  dist$pdif <- abs(q - dist$P)
-  lq <- dist$L[which(dist$pdif==min(dist$pdif))]
+  z.off <- z + offset
+  dist$qdif <- abs(z.off - dist$z.off)
+  dist$`dL/dP` <- c(0,diff(dist$L))/c(0,diff(dist$P))
+  thresholdset <- dist[dist[, .I[which(dist$qdif==min(dist$qdif))]]]
+  #grad <- coef(lm(thresholdset$L~thresholdset$P))[2]
+  grad <- min(thresholdset$`dL/dP`)
+  q <- min(thresholdset$P)
+  lq <- min(thresholdset$L)
   b <- q - lq
-  t <- b + (0.5-q)*(1-z/mu)
-  gp <- 2*(mu/z)*(2*t-g)
+  t <- b + (0.5-q)*(1-grad)
+  gp <- (2/grad)*(2*t-g)
   return(gp)
 }
 
